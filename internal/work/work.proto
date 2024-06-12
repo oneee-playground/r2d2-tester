@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package work;
+
+option go_package = "./work";
+
+import "google/protobuf/duration.proto";
+
+message Input {
+    string method = 1;
+    string path = 2;
+    map<string, string> headers = 3;
+    bytes body = 4; 
+}
+
+message Expected {
+    uint32 status = 1;
+    map<string, string> headers = 2;
+    bytes body = 3;
+}
+
+message TemplatedSchema {
+    map<string, string> headers = 1;
+    bytes body_schema = 2;
+}
+
+message Template {
+    bytes id = 1;
+    map<uint32, TemplatedSchema> schema_table = 2;
+}
+
+message Work {
+    bytes id = 1;
+    Input input = 2;
+    bytes template_id = 3;
+    optional Expected expected_value = 4;
+    google.protobuf.Duration timeout = 5;
+}
