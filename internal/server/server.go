@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/oneee-playground/r2d2-tester/internal/event"
 	"github.com/oneee-playground/r2d2-tester/internal/exec"
 	"github.com/oneee-playground/r2d2-tester/internal/job"
 	"go.uber.org/zap"
@@ -14,6 +15,8 @@ type Server struct {
 
 	jobPoller    job.Poller
 	pollInterval time.Duration
+
+	eventPublisher event.Publisher
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -37,20 +40,36 @@ func (s *Server) Run(ctx context.Context) error {
 			continue
 		}
 
-		submissionID := received.Submission.ID.String()
+		submissionID := received.Submission.ID
 
-		s.log.Info("polled job", zap.String("submissionID", submissionID))
+		s.log.Info("polled job", zap.String("submissionID", submissionID.String()))
 
-		log := s.log.With(zap.String("submissionID", submissionID))
+		log := s.log.With(zap.String("submissionID", submissionID.String()))
 
-		if err := exec.NewExecutor(log).Execute(ctx, received); err != nil {
+		start := time.Now()
+
+		err = exec.NewExecutor(log).Execute(ctx, received)
+		if err != nil {
 			s.log.Error("failed to execute a job", zap.Error(err))
-			continue
 		}
 
-		if err := s.jobPoller.MarkAsDone(ctx, id); err != nil {
-			s.log.Error("failed to mark a job as done", zap.Error(err))
-			continue
+		event := event.TestEvent{
+			ID:      submissionID,
+			Success: err == nil,
+			Took:    time.Since(start),
+		}
+
+		if err == nil {
+			if err := s.jobPoller.MarkAsDone(ctx, id); err != nil {
+				s.log.Error("failed to mark a job as done", zap.Error(err))
+				continue
+			}
+		} else {
+			event.Extra = err.Error()
+		}
+
+		if err := s.eventPublisher.Publish(ctx, event); err != nil {
+			s.log.Error("failed to execute a job", zap.Error(err))
 		}
 	}
 }
