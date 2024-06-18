@@ -48,7 +48,14 @@ func (s *Server) Run(ctx context.Context) error {
 
 		start := time.Now()
 
-		err = exec.NewExecutor(log).Execute(ctx, received)
+		opts := exec.ExecOpts{
+			Log: log,
+			// HTTPClient:  ,
+			// WorkStorage: ,
+			// Docker:      ,
+		}
+
+		err = exec.NewExecutor(opts).Execute(ctx, received)
 		if err != nil {
 			s.log.Error("failed to execute a job", zap.Error(err))
 		}
