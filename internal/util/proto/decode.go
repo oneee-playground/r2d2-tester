@@ -24,6 +24,8 @@ func NewDecoder(r io.Reader) *Decoder {
 	}
 }
 
+// Decode decodes bytes read from source info proto.Message.
+// It is caller's responsibility to handle EOF.
 func (d *Decoder) Decode(m proto.Message) error {
 	if _, err := io.ReadFull(d.src, d.lenbuf); err != nil {
 		return errors.Wrap(err, "reading length")
