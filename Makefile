@@ -7,3 +7,7 @@ unit-test:
 .PHONY: compile-proto
 compile-proto:
 	protoc -I="./internal/work" --go_out="./internal" "./internal/work/work.proto"
+
+.PHONY: local-test
+local-test:
+	go test -v -race ./test/local/...
