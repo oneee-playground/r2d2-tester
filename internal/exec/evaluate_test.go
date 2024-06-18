@@ -21,7 +21,7 @@ func TestEvalStatus(t *testing.T) {
 	})
 }
 
-func TestEvalHeaderExact(t *testing.T) {
+func TestEvalHeaderAtLeast(t *testing.T) {
 	testcases := []struct {
 		desc    string
 		input   http.Header
@@ -47,7 +47,7 @@ func TestEvalHeaderExact(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			desc: "unexpected key 'Baz'",
+			desc: "unexpected key 'Baz' but ok",
 			input: http.Header{
 				"Foo": []string{"bar"},
 				"Baz": []string{"quz"},
@@ -55,13 +55,13 @@ func TestEvalHeaderExact(t *testing.T) {
 			expect: map[string]string{
 				"Foo": "bar",
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
-			err := evalHeaderExact(tc.input, tc.expect)
+			err := evalHeaderAtLeast(tc.input, tc.expect)
 			if tc.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -158,9 +158,10 @@ func TestEvalBodyJsonSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	testcases := []struct {
-		desc    string
-		body    string
-		wantErr bool
+		desc     string
+		body     string
+		wantErr  bool
+		noSchema bool
 	}{
 		{
 			desc: "fits (with tags)",
@@ -257,13 +258,30 @@ func TestEvalBodyJsonSchema(t *testing.T) {
 			`,
 			wantErr: true,
 		},
+		{
+			desc:     "no schema (empty body)",
+			body:     "",
+			wantErr:  false,
+			noSchema: true,
+		},
+		{
+			desc:     "no schema (non-empty body)",
+			body:     "foo",
+			wantErr:  true,
+			noSchema: true,
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
 			bodyReader := io.NopCloser(strings.NewReader(tc.body))
 
-			err := evalBodyJsonSchema(bodyReader, schema)
+			s := schema
+			if tc.noSchema {
+				s = nil
+			}
+
+			err := evalBodyJsonSchema(bodyReader, s)
 			if tc.wantErr {
 				assert.Error(t, err)
 			} else {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/xeipuuv/gojsonschema"
@@ -21,7 +20,7 @@ func evalStatuscode(actual, expected int) error {
 	return nil
 }
 
-func evalHeaderExact(header http.Header, expected map[string]string) error {
+func evalHeaderAtLeast(header http.Header, expected map[string]string) error {
 	for key, val := range expected {
 		got := header.Get(key)
 		if got != val {
@@ -30,17 +29,6 @@ func evalHeaderExact(header http.Header, expected map[string]string) error {
 				key, val, got,
 			)
 		}
-
-		header.Del(key)
-	}
-
-	if len(header) > 0 {
-		kvPairs := make([][2]string, 0, len(header))
-		for key, val := range header {
-			kvPairs = append(kvPairs, [2]string{key, strings.Join(val, ",")})
-		}
-
-		return errors.Errorf("unexpected additional headers: %v", kvPairs)
 	}
 
 	return nil
@@ -70,6 +58,13 @@ func evalBodyJsonSchema(body io.ReadCloser, schema *gojsonschema.Schema) error {
 	bodyBytes, err := io.ReadAll(body)
 	if err != nil {
 		return errors.Wrap(err, "reading body")
+	}
+
+	if schema == nil {
+		if len(bodyBytes) > 0 {
+			return errors.New("schema not provided, but non-empty body was given")
+		}
+		return nil
 	}
 
 	bodyLoader := gojsonschema.NewBytesLoader(bodyBytes)
