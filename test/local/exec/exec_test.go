@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
 	"github.com/oneee-playground/r2d2-tester/internal/exec"
@@ -24,7 +26,8 @@ type ExecSuite struct {
 	workStorage work.Storage
 	docker      client.APIClient
 
-	tempdir string
+	tempdir     string
+	execNetwork, testNetwork string
 }
 
 func TestExecSuite(t *testing.T) {
@@ -32,26 +35,36 @@ func TestExecSuite(t *testing.T) {
 }
 
 func (s *ExecSuite) SetupSuite() {
-	s.tempdir = s.T().TempDir()
+	s.execNetwork = "exec-network"
+	s.testNetwork = "test-network"
 
+	s.tempdir = s.T().TempDir()
 	s.Require().NoError(generateTestData("testdata", s.tempdir))
 
 	s.httpClient = http.DefaultClient
+
 	s.workStorage = storage.NewFSStorage(s.tempdir)
-
-	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	s.Require().NoError(err)
-
-	s.docker = client
 
 	s.log = zap.New(zapcore.NewCore(
 		zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
 		zapcore.AddSync(os.Stdout),
 		zap.DebugLevel,
 	), zap.AddCaller())
+
+	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	s.Require().NoError(err)
+
+	s.docker = client
+	_, err = s.docker.NetworkCreate(context.Background(), s.execNetwork, types.NetworkCreate{
+		Driver: network.NetworkBridge,
+		Internal: true,
+	})
+	s.Require().NoError(err)
 }
 
-func (s *ExecSuite) TearDownSuite() {}
+func (s *ExecSuite) TearDownSuite() {
+	s.Require().NoError(s.docker.NetworkRemove(context.Background(), s.execNetwork))
+}
 
 func (s *ExecSuite) TestExecutor() {
 	opts := exec.ExecOpts{
@@ -59,13 +72,14 @@ func (s *ExecSuite) TestExecutor() {
 		HTTPClient:  s.httpClient,
 		WorkStorage: s.workStorage,
 		Docker:      s.docker,
+		ExecNetwork: s.execNetwork,
+		TestNetwork: s.testNetwork,
 	}
 
 	job := job.Job{
 		TaskID: uuid.Nil,
 		Resources: []job.Resource{
 			{
-				// Image: "",
 				Name:      "app",
 				Port:      4000,
 				CPU:       1,

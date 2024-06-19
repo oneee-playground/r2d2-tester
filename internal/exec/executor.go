@@ -22,6 +22,9 @@ type process struct {
 }
 
 type ExecOpts struct {
+	ExecNetwork string
+	TestNetwork string
+
 	Log         *zap.Logger
 	HTTPClient  *http.Client
 	WorkStorage work.Storage
@@ -50,6 +53,9 @@ func (e *Executor) Execute(ctx context.Context, jobToExec job.Job) error {
 	if err := e.setupResources(ctx, taskID, jobToExec.Resources, jobToExec.Submission); err != nil {
 		return errors.Wrap(err, "setting up resources")
 	}
+
+	// TODO: Add health check for containers. You can do it.
+	time.Sleep(5 * time.Second)
 
 	for idx, section := range jobToExec.Sections {
 		e.Log.Info("started execution of section",

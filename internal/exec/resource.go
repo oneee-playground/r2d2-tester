@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
 	"github.com/oneee-playground/r2d2-tester/internal/job"
@@ -47,23 +47,35 @@ func (e *Executor) setupResources(
 
 		e.Log.Debug("resource info", zap.Any("info", resource))
 
-		natPort := nat.Port(fmt.Sprintf("%d/tcp", resource.Port))
-
 		containerConf := &container.Config{
 			Image:        resource.Image,
 			Hostname:     resource.Name,
 			Domainname:   resource.Name,
-			ExposedPorts: nat.PortSet{natPort: struct{}{}},
 			// Volumes:      map[string]struct{}{},
 			// Healthcheck:  &container.HealthConfig{},
 		}
 
+		port := strconv.Itoa(int(resource.Port))
+
+		natPort, err := nat.NewPort("tcp", port)
+		if err != nil {
+			return errors.Wrap(err, "parsing binding")
+		}
+
 		hostConf := &container.HostConfig{
-			NetworkMode: network.NetworkBridge,
+			NetworkMode: container.NetworkMode(e.ExecNetwork),
 			Resources: container.Resources{
 				Memory:    int64(resource.Memory),
 				CPUPeriod: defaultCPUPeriod,
 				CPUQuota:  int64(resource.CPU * float64(defaultCPUPeriod)),
+			},
+			PortBindings: nat.PortMap{
+				natPort: []nat.PortBinding{
+					{
+						HostIP: "0.0.0.0",
+						HostPort: port,
+					},
+				},
 			},
 		}
 
@@ -72,30 +84,40 @@ func (e *Executor) setupResources(
 			OS:           "linux",
 		}
 
-		r, err := e.Docker.ImagePull(ctx, resource.Image, image.PullOptions{Platform: "linux/amd64"})
+		content, err := e.Docker.ImagePull(ctx, resource.Image, image.PullOptions{Platform: "linux/amd64"})
 		if err != nil {
 			return errors.Wrap(err, "pulling image")
 		}
 
-		if _, err := io.Copy(io.Discard, r); err != nil {
+		if _, err := io.Copy(io.Discard, content); err != nil {
 			return errors.Wrap(err, "reading output from docker daemon")
 		}
 
-		res, err := e.Docker.ContainerCreate(ctx, containerConf, hostConf, nil, platformConf, resource.Name)
+		con, err := e.Docker.ContainerCreate(ctx, containerConf, hostConf, nil, platformConf, resource.Name)
 		if err != nil {
 			return errors.Wrap(err, "creating container")
 		}
 
-		if len(res.Warnings) > 0 {
-			e.Log.Warn("warning during container creation", zap.Strings("warnings", res.Warnings))
+		if len(con.Warnings) > 0 {
+			e.Log.Warn("warning during container creation", zap.Strings("warnings", con.Warnings))
 		}
 
-		if err := e.Docker.ContainerStart(ctx, res.ID, container.StartOptions{}); err != nil {
+		if resource.IsPrimary {
+			// In order to send request to primary process from teseter,
+			// primary process should be connected to the test network.  
+			e.Log.Info("resource is primary. connecting to test network")
+			
+			if err := e.Docker.NetworkConnect(ctx, e.TestNetwork, con.ID, nil); err != nil {
+				return errors.Wrap(err, "connecting primary process to test network")
+			}
+		}
+
+		if err := e.Docker.ContainerStart(ctx, con.ID, container.StartOptions{}); err != nil {
 			return errors.Wrap(err, "starting container")
 		}
 
 		*proc = process{
-			ID:       res.ID,
+			ID:       con.ID,
 			Hostname: resource.Name,
 			Port:     resource.Port,
 			Image:    resource.Image,
