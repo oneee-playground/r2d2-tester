@@ -48,11 +48,11 @@ func (e *Executor) setupResources(
 		e.Log.Debug("resource info", zap.Any("info", resource))
 
 		containerConf := &container.Config{
-			Image:        resource.Image,
-			Hostname:     resource.Name,
-			Domainname:   resource.Name,
-			// Volumes:      map[string]struct{}{},
-			// Healthcheck:  &container.HealthConfig{},
+			Image:      resource.Image,
+			Hostname:   resource.Name,
+			Domainname: resource.Name,
+			// Volumes:     map[string]struct{}{},
+			// Healthcheck: &container.HealthConfig{},
 		}
 
 		port := strconv.Itoa(int(resource.Port))
@@ -72,7 +72,7 @@ func (e *Executor) setupResources(
 			PortBindings: nat.PortMap{
 				natPort: []nat.PortBinding{
 					{
-						HostIP: "0.0.0.0",
+						HostIP:   "0.0.0.0",
 						HostPort: port,
 					},
 				},
@@ -104,9 +104,9 @@ func (e *Executor) setupResources(
 
 		if resource.IsPrimary {
 			// In order to send request to primary process from teseter,
-			// primary process should be connected to the test network.  
+			// primary process should be connected to the test network.
 			e.Log.Info("resource is primary. connecting to test network")
-			
+
 			if err := e.Docker.NetworkConnect(ctx, e.TestNetwork, con.ID, nil); err != nil {
 				return errors.Wrap(err, "connecting primary process to test network")
 			}

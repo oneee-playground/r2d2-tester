@@ -68,20 +68,22 @@ func (e *Executor) Execute(ctx context.Context, jobToExec job.Job) error {
 			return err
 		}
 
-		stream, errchan := e.WorkStorage.Stream(ctx, taskID, section.ID)
+		cancelCtx, cancel := context.WithCancelCause(ctx)
+
+		stream, errchan := e.WorkStorage.Stream(cancelCtx, taskID, section.ID)
+
+		e.Log.Info("determined section type", zap.String("type", string(section.Type)))
 
 		switch section.Type {
 		case job.TypeScenario:
-			if err := e.testScenario(ctx, templates, stream, errchan); err != nil {
-				return errors.Wrap(err, "testing scenario")
-			}
+			err = e.testScenario(cancelCtx, templates, stream, errchan)
 		case job.TypeLoad:
-			// TODO: no-op for now.
-			//
-			// if err := e.testLoad(ctx, templates, stream); err != nil {
-			// 	return errors.Wrap(err, "testing load")
-			// }
-			panic("should not be called")
+			err = e.testLoad(cancelCtx, templates, stream, errchan)
+		}
+
+		if err != nil {
+			cancel(err)
+			return errors.Wrapf(err, "testing %s", section.Type)
 		}
 	}
 

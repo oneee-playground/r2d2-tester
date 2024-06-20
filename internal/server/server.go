@@ -44,12 +44,12 @@ func (s *Server) Run(ctx context.Context) error {
 
 		s.log.Info("polled job", zap.String("submissionID", submissionID.String()))
 
-		log := s.log.With(zap.String("submissionID", submissionID.String()))
+		submissionLog := s.log.With(zap.String("submissionID", submissionID.String()))
 
 		start := time.Now()
 
 		opts := exec.ExecOpts{
-			Log: log,
+			Log: submissionLog,
 			// HTTPClient:  ,
 			// WorkStorage: ,
 			// Docker:      ,
@@ -66,13 +66,13 @@ func (s *Server) Run(ctx context.Context) error {
 			Took:    time.Since(start),
 		}
 
-		if err == nil {
-			if err := s.jobPoller.MarkAsDone(ctx, id); err != nil {
-				s.log.Error("failed to mark a job as done", zap.Error(err))
-				continue
-			}
-		} else {
+		if err != nil {
 			event.Extra = err.Error()
+		}
+
+		if err := s.jobPoller.MarkAsDone(ctx, id); err != nil {
+			s.log.Error("failed to mark a job as done", zap.Error(err))
+			continue
 		}
 
 		if err := s.eventPublisher.Publish(ctx, event); err != nil {
