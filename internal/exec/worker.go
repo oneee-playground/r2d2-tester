@@ -92,3 +92,107 @@ func (w *worker) sendRequest(ctx context.Context, input *work.Input) (*http.Resp
 
 	return res, nil
 }
+
+type concurrentWorker struct {
+	underlying *worker
+
+	index       int
+	inputStream chan *work.Work
+}
+
+func (cw *concurrentWorker) run(
+	ctx context.Context,
+	doneStream chan<- int, errchan chan<- error,
+) {
+	defer close(cw.inputStream)
+
+	var work *work.Work
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case work = <-cw.inputStream:
+		}
+
+		if err := cw.underlying.do(ctx, work); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			errchan <- err
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case doneStream <- cw.index:
+		}
+	}
+}
+
+type workerPool struct {
+	workers []*concurrentWorker
+
+	doneStream chan int
+	errchan    chan error
+
+	closeFunc func()
+}
+
+func newWorkerPool(
+	count int,
+	target *process, templates map[uuid.UUID]template, httpClient *http.Client,
+) *workerPool {
+	pool := &workerPool{
+		workers:    make([]*concurrentWorker, count),
+		doneStream: make(chan int, count),
+		errchan:    make(chan error, count),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	pool.closeFunc = cancel
+
+	for i := 0; i < count; i++ {
+		cw := &concurrentWorker{
+			index: i,
+			underlying: &worker{
+				target:     target,
+				templates:  templates,
+				httpClient: httpClient,
+			},
+			inputStream: make(chan *work.Work),
+		}
+
+		go cw.run(ctx, pool.doneStream, pool.errchan)
+
+		pool.workers[i] = cw
+		pool.doneStream <- i
+	}
+
+	return pool
+}
+
+func (wp *workerPool) do(ctx context.Context, work *work.Work) error {
+	// Wait for any worker sending done signal
+	var idx int
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case idx = <-wp.doneStream:
+	}
+
+	worker := wp.workers[idx]
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case worker.inputStream <- work:
+	}
+
+	return nil
+}
+
+func (wp *workerPool) close() {
+	wp.closeFunc()
+}

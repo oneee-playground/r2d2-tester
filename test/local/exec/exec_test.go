@@ -26,7 +26,7 @@ type ExecSuite struct {
 	workStorage work.Storage
 	docker      client.APIClient
 
-	tempdir     string
+	tempdir                  string
 	execNetwork, testNetwork string
 }
 
@@ -56,7 +56,7 @@ func (s *ExecSuite) SetupSuite() {
 
 	s.docker = client
 	_, err = s.docker.NetworkCreate(context.Background(), s.execNetwork, types.NetworkCreate{
-		Driver: network.NetworkBridge,
+		Driver:   network.NetworkBridge,
 		Internal: true,
 	})
 	s.Require().NoError(err)
@@ -91,6 +91,10 @@ func (s *ExecSuite) TestExecutor() {
 			{
 				ID:   uuid.Nil,
 				Type: job.TypeScenario,
+			},
+			{
+				ID:   uuid.Nil,
+				Type: job.TypeLoad,
 			},
 		},
 		Submission: job.Submission{
