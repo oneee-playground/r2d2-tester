@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/oneee-playground/r2d2-tester/internal/work"
@@ -101,9 +102,10 @@ type concurrentWorker struct {
 }
 
 func (cw *concurrentWorker) run(
-	ctx context.Context,
+	ctx context.Context, wg *sync.WaitGroup,
 	doneStream chan<- int, errchan chan<- error,
 ) {
+	defer wg.Done()
 	defer close(cw.inputStream)
 
 	var work *work.Work
@@ -123,16 +125,13 @@ func (cw *concurrentWorker) run(
 			return
 		}
 
-		select {
-		case <-ctx.Done():
-			return
-		case doneStream <- cw.index:
-		}
+		doneStream <- cw.index
 	}
 }
 
 type workerPool struct {
 	workers []*concurrentWorker
+	wg      *sync.WaitGroup
 
 	doneStream chan int
 	errchan    chan error
@@ -146,6 +145,7 @@ func newWorkerPool(
 ) *workerPool {
 	pool := &workerPool{
 		workers:    make([]*concurrentWorker, count),
+		wg:         new(sync.WaitGroup),
 		doneStream: make(chan int, count),
 		errchan:    make(chan error, count),
 	}
@@ -154,6 +154,8 @@ func newWorkerPool(
 	pool.closeFunc = cancel
 
 	for i := 0; i < count; i++ {
+		pool.wg.Add(1)
+
 		cw := &concurrentWorker{
 			index: i,
 			underlying: &worker{
@@ -164,7 +166,7 @@ func newWorkerPool(
 			inputStream: make(chan *work.Work),
 		}
 
-		go cw.run(ctx, pool.doneStream, pool.errchan)
+		go cw.run(ctx, pool.wg, pool.doneStream, pool.errchan)
 
 		pool.workers[i] = cw
 		pool.doneStream <- i
@@ -173,26 +175,7 @@ func newWorkerPool(
 	return pool
 }
 
-func (wp *workerPool) do(ctx context.Context, work *work.Work) error {
-	// Wait for any worker sending done signal
-	var idx int
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case idx = <-wp.doneStream:
-	}
-
-	worker := wp.workers[idx]
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case worker.inputStream <- work:
-	}
-
-	return nil
-}
-
 func (wp *workerPool) close() {
 	wp.closeFunc()
+	wp.wg.Wait()
 }

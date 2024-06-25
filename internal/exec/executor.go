@@ -74,12 +74,21 @@ func (e *Executor) Execute(ctx context.Context, jobToExec job.Job) error {
 
 		e.Log.Info("determined section type", zap.String("type", string(section.Type)))
 
+		start := time.Now()
+
 		switch section.Type {
 		case job.TypeScenario:
 			err = e.testScenario(cancelCtx, templates, stream, errchan)
 		case job.TypeLoad:
-			err = e.testLoad(cancelCtx, templates, stream, errchan)
+			var dueMissed int
+			dueMissed, err = e.testLoad(cancelCtx, section.RPM, templates, stream, errchan)
+
+			if dueMissed > 0 {
+				e.Log.Info("test has missed dues", zap.Int("missed", dueMissed))
+			}
 		}
+
+		e.Log.Info("section execution done", zap.Duration("took", time.Since(start)))
 
 		if err != nil {
 			cancel(err)

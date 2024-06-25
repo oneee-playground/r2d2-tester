@@ -76,7 +76,6 @@ func (s *FSStorage) Stream(ctx context.Context, taskID uuid.UUID, sectionID uuid
 	errchan := make(chan error, 1)
 
 	go func() {
-		defer close(errchan)
 		defer close(stream)
 
 		path := filepath.Join(s.root, taskID.String(), sectionID.String(), _filepathWorkPrefix)
