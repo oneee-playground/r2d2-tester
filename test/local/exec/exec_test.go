@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"testing"
 
 	"github.com/docker/docker/api/types"
@@ -15,6 +17,7 @@ import (
 	"github.com/oneee-playground/r2d2-tester/internal/work"
 	"github.com/oneee-playground/r2d2-tester/internal/work/storage"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/goleak"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -67,6 +70,8 @@ func (s *ExecSuite) TearDownSuite() {
 }
 
 func (s *ExecSuite) TestExecutor() {
+	defer goleak.VerifyNone(s.T())
+
 	opts := exec.ExecOpts{
 		Log:         s.log,
 		HTTPClient:  s.httpClient,
@@ -95,6 +100,7 @@ func (s *ExecSuite) TestExecutor() {
 			{
 				ID:   uuid.Nil,
 				Type: job.TypeLoad,
+				RPM:  1000,
 			},
 		},
 		Submission: job.Submission{
@@ -104,6 +110,12 @@ func (s *ExecSuite) TestExecutor() {
 		},
 	}
 
-	err := exec.NewExecutor(opts).Execute(context.Background(), job)
+	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	err := exec.NewExecutor(opts).Execute(ctx, job)
 	s.NoError(err)
+
+	s.docker.Close()
 }
