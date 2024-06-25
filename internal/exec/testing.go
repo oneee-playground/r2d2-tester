@@ -108,7 +108,7 @@ func (e *Executor) testLoad(
 			}
 
 			remaining := requestRate - time.Since(latestMiss)
-			timer.Reset(min(remaining, 1))
+			timer.Reset(min(remaining, 10*time.Microsecond))
 		}
 
 		latestMiss = time.Time{}
