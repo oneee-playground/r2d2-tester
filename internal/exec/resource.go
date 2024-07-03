@@ -13,7 +13,10 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
+	"github.com/influxdata/influxdb-client-go/api/write"
 	"github.com/oneee-playground/r2d2-tester/internal/job"
+	"github.com/oneee-playground/r2d2-tester/internal/metric"
+	"github.com/oneee-playground/r2d2-tester/internal/util/stream"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -175,4 +178,64 @@ func (e *Executor) teardownResources(ctx context.Context) {
 
 func makeCustomImageName(registry, username string, taskID uuid.UUID, repository, commitHash string) string {
 	return fmt.Sprintf("%s/%s/%s:%s-%s", registry, username, taskID.String(), strings.Replace(repository, "/", "-", 1), commitHash)
+}
+
+func (e *Executor) startMetricCollection(ctx context.Context, cancel func(error)) {
+	collector := metric.Collector{Docker: e.Docker}
+
+	statStreams := make([]<-chan metric.Stat, len(e.processes))
+	errchans := make([]<-chan error, len(e.processes))
+
+	for idx, proc := range e.processes {
+		statStream, errchan := collector.Collect(ctx, proc.Hostname)
+		statStreams[idx] = statStream
+		errchans[idx] = errchan
+	}
+
+	go func() {
+		statStream := stream.FanIn(statStreams...)
+		errchan := stream.FanIn(errchans...)
+
+		var stat metric.Stat
+		var ok bool
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err := <-errchan:
+				cancel(err)
+				return
+			case stat, ok = <-statStream:
+				if !ok {
+					return
+				}
+			}
+
+			tags := map[string]string{"container": stat.Container}
+
+			fields := map[string]interface{}{
+				"cpu-usage":    stat.TotalCPUUsage,
+				"memory-usage": stat.MemoryUsage,
+				"block-read":   stat.BlockRead,
+				"block-write":  stat.BlockWrite,
+				"net-read":     stat.NetRead,
+				"net-write":    stat.NetWrite,
+			}
+
+			for idx, v := range stat.CPUUsagePerCore {
+				fields["cpu-usage-core-"+strconv.Itoa(idx)] = v
+			}
+
+			e.metrics.Write(write.NewPoint("resource-usage", tags, fields, time.Now()))
+		}
+	}()
+}
+
+func (e *Executor) setTimestamp(t time.Time, sectionID uuid.UUID, label string) {
+	e.metrics.Write(write.NewPoint(
+		"label",
+		map[string]string{"section-id": sectionID.String()},
+		map[string]interface{}{"label": label},
+		t,
+	))
 }

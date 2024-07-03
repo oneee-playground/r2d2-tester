@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
 	"github.com/oneee-playground/r2d2-tester/internal/job"
+	"github.com/oneee-playground/r2d2-tester/internal/metric"
 	"github.com/oneee-playground/r2d2-tester/internal/work"
 	"github.com/pkg/errors"
 	"github.com/xeipuuv/gojsonschema"
@@ -25,15 +26,18 @@ type ExecOpts struct {
 	ExecNetwork string
 	TestNetwork string
 
-	Log         *zap.Logger
-	HTTPClient  *http.Client
-	WorkStorage work.Storage
-	Docker      client.APIClient
+	Log           *zap.Logger
+	HTTPClient    *http.Client
+	WorkStorage   work.Storage
+	MetricStorage *metric.Storage
+	Docker        client.APIClient
 }
 
 type Executor struct {
 	processes      []*process
 	primaryProcess *process
+
+	metrics *metric.WriteSession
 
 	ExecOpts
 }
@@ -57,7 +61,21 @@ func (e *Executor) Execute(ctx context.Context, jobToExec job.Job) error {
 	// TODO: Add health check for containers. You can do it.
 	time.Sleep(5 * time.Second)
 
+	ctx, cancel := context.WithCancelCause(ctx)
+	session, errchan := e.MetricStorage.WriteSession(taskID.String(), jobToExec.Submission.ID.String())
+	go func() {
+		if err, ok := <-errchan; ok {
+			cancel(err)
+		}
+	}()
+
+	defer session.Close()
+	e.metrics = session
+
+	e.startMetricCollection(ctx, cancel)
+
 	for idx, section := range jobToExec.Sections {
+		e.setTimestamp(time.Now(), section.ID, "start-exec")
 		e.Log.Info("started execution of section",
 			zap.Int("index", idx),
 			zap.String("id", section.ID.String()),
@@ -68,25 +86,26 @@ func (e *Executor) Execute(ctx context.Context, jobToExec job.Job) error {
 			return err
 		}
 
-		cancelCtx, cancel := context.WithCancelCause(ctx)
-
-		stream, errchan := e.WorkStorage.Stream(cancelCtx, taskID, section.ID)
+		stream, errchan := e.WorkStorage.Stream(ctx, taskID, section.ID)
 
 		e.Log.Info("determined section type", zap.String("type", string(section.Type)))
 
 		start := time.Now()
+		e.setTimestamp(start, section.ID, "start-request")
 
 		switch section.Type {
 		case job.TypeScenario:
-			err = e.testScenario(cancelCtx, templates, stream, errchan)
+			err = e.testScenario(ctx, section.ID, templates, stream, errchan)
 		case job.TypeLoad:
 			var dueMissed int
-			dueMissed, err = e.testLoad(cancelCtx, section.RPM, templates, stream, errchan)
+			dueMissed, err = e.testLoad(ctx, section.ID, section.RPM, templates, stream, errchan)
 
 			if dueMissed > 0 {
 				e.Log.Info("test has missed dues", zap.Int("missed", dueMissed))
 			}
 		}
+
+		e.setTimestamp(time.Now(), section.ID, "request-done")
 
 		e.Log.Info("section execution done", zap.Duration("took", time.Since(start)))
 

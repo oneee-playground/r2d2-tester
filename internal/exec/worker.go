@@ -88,6 +88,9 @@ func (w *worker) sendRequest(ctx context.Context, input *work.Input) (*http.Resp
 
 	res, err := w.httpClient.Do(request)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			err = context.Cause(ctx)
+		}
 		return nil, errors.Wrap(err, "sending request")
 	}
 
@@ -140,8 +143,8 @@ type workerPool struct {
 }
 
 func newWorkerPool(
-	count int,
-	target *process, templates map[uuid.UUID]template, httpClient *http.Client,
+	count int, target *process, templates map[uuid.UUID]template,
+	httpClient *http.Client,
 ) *workerPool {
 	pool := &workerPool{
 		workers:    make([]*concurrentWorker, count),
@@ -178,4 +181,5 @@ func newWorkerPool(
 func (wp *workerPool) close() {
 	wp.closeFunc()
 	wp.wg.Wait()
+	close(wp.doneStream)
 }

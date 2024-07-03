@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/influxdata/influxdb-client-go/api/write"
 	"github.com/oneee-playground/r2d2-tester/internal/work"
 	"github.com/pkg/errors"
 )
 
 func (e *Executor) testScenario(
-	ctx context.Context,
+	ctx context.Context, sectionID uuid.UUID,
 	templates map[uuid.UUID]template, stream <-chan *work.Work, errchan <-chan error,
 ) error {
 	var work *work.Work
@@ -22,6 +23,8 @@ func (e *Executor) testScenario(
 		templates:  templates,
 		httpClient: e.HTTPClient,
 	}
+
+	defer e.metrics.Flush()
 
 	for {
 		select {
@@ -35,20 +38,33 @@ func (e *Executor) testScenario(
 			}
 		}
 
+		start := time.Now()
 		if err := worker.do(ctx, work); err != nil {
 			return errors.Wrap(err, "doing work")
 		}
+
+		end := time.Now()
+		e.metrics.Write(write.NewPoint("response",
+			map[string]string{
+				"section-id": sectionID.String(),
+			},
+			map[string]interface{}{
+				"latency": end.Sub(start).Nanoseconds(),
+			},
+			end,
+		))
 	}
 }
 
 func (e *Executor) testLoad(
-	ctx context.Context, rpm uint64,
+	ctx context.Context, sectionID uuid.UUID, rpm uint64,
 	templates map[uuid.UUID]template, workStream <-chan *work.Work, storageErrchan <-chan error,
 ) (int, error) {
+	defer e.metrics.Flush()
+
 	workerPool := newWorkerPool(
 		runtime.GOMAXPROCS(0), e.primaryProcess, templates, e.HTTPClient,
 	)
-	defer workerPool.close()
 
 	var requestRate time.Duration
 	if rpm <= 60 {
@@ -90,8 +106,12 @@ func (e *Executor) testLoad(
 	donechan := workerPool.doneStream
 	stream := workStream
 
+	workerStart := make([]time.Time, len(workerPool.workers))
+
 	feedWorker := func() {
 		worker.inputStream <- pendingWork
+
+		workerStart[worker.index] = time.Now()
 
 		// Reset current worker and work.
 		worker, pendingWork = nil, nil
@@ -114,11 +134,28 @@ func (e *Executor) testLoad(
 		latestMiss = time.Time{}
 	}
 
+	writeLatency := func(idx int) {
+		if start := workerStart[idx]; !start.IsZero() {
+			end := time.Now()
+
+			e.metrics.Write(write.NewPoint("response",
+				map[string]string{
+					"section-id": sectionID.String(),
+				},
+				map[string]interface{}{
+					"latency": end.Sub(start).Nanoseconds(),
+				},
+				end,
+			))
+		}
+	}
+
 	dueMissed := 0
 
 	for {
 		select {
 		case err := <-errchan:
+			workerPool.close()
 			return dueMissed, err
 		case t := <-timer.C:
 			if pendingWork != nil && worker != nil {
@@ -128,6 +165,11 @@ func (e *Executor) testLoad(
 			}
 
 			if donechan == nil && stream == nil {
+				workerPool.close()
+				// Drain the channel and write metrics.
+				for idx := range workerPool.doneStream {
+					writeLatency(idx)
+				}
 				return dueMissed, nil
 			}
 
@@ -139,6 +181,8 @@ func (e *Executor) testLoad(
 			timer.Reset(requestRate)
 		case workerIdx := <-donechan:
 			worker = workerPool.workers[workerIdx]
+
+			writeLatency(worker.index)
 
 			if !latestMiss.IsZero() && pendingWork != nil {
 				// Getting free worker was slower.

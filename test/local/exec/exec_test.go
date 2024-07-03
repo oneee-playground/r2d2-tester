@@ -8,12 +8,13 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
+	influxdb2 "github.com/influxdata/influxdb-client-go"
 	"github.com/oneee-playground/r2d2-tester/internal/exec"
 	"github.com/oneee-playground/r2d2-tester/internal/job"
+	"github.com/oneee-playground/r2d2-tester/internal/metric"
 	"github.com/oneee-playground/r2d2-tester/internal/work"
 	"github.com/oneee-playground/r2d2-tester/internal/work/storage"
 	"github.com/stretchr/testify/suite"
@@ -24,10 +25,13 @@ import (
 
 type ExecSuite struct {
 	suite.Suite
-	log         *zap.Logger
-	httpClient  *http.Client
-	workStorage work.Storage
-	docker      client.APIClient
+	log           *zap.Logger
+	httpClient    *http.Client
+	workStorage   work.Storage
+	metricStroage *metric.Storage
+	docker        client.APIClient
+
+	influxClient influxdb2.Client
 
 	tempdir                  string
 	execNetwork, testNetwork string
@@ -58,11 +62,20 @@ func (s *ExecSuite) SetupSuite() {
 	s.Require().NoError(err)
 
 	s.docker = client
-	_, err = s.docker.NetworkCreate(context.Background(), s.execNetwork, types.NetworkCreate{
+	_, err = s.docker.NetworkCreate(context.Background(), s.execNetwork, network.CreateOptions{
 		Driver:   network.NetworkBridge,
 		Internal: true,
 	})
 	s.Require().NoError(err)
+
+	options := influxdb2.DefaultOptions()
+
+	// It's okay. It is only tested in local.
+	const token = "Qgfb1CR5cmJFD7AlwwKDULCR7TRi7SWYIyqI096U-J3mqM8wbxEQErPPJbH8Ei830OYvz2J56buiRD1F3mp7Yg=="
+
+	s.influxClient = influxdb2.NewClientWithOptions("http://influxdb:8086", token, options)
+
+	s.metricStroage = metric.NewStorage(s.influxClient)
 }
 
 func (s *ExecSuite) TearDownSuite() {
@@ -73,12 +86,13 @@ func (s *ExecSuite) TestExecutor() {
 	defer goleak.VerifyNone(s.T())
 
 	opts := exec.ExecOpts{
-		Log:         s.log,
-		HTTPClient:  s.httpClient,
-		WorkStorage: s.workStorage,
-		Docker:      s.docker,
-		ExecNetwork: s.execNetwork,
-		TestNetwork: s.testNetwork,
+		Log:           s.log,
+		HTTPClient:    s.httpClient,
+		WorkStorage:   s.workStorage,
+		Docker:        s.docker,
+		MetricStorage: s.metricStroage,
+		ExecNetwork:   s.execNetwork,
+		TestNetwork:   s.testNetwork,
 	}
 
 	job := job.Job{
@@ -117,5 +131,6 @@ func (s *ExecSuite) TestExecutor() {
 	err := exec.NewExecutor(opts).Execute(ctx, job)
 	s.NoError(err)
 
+	s.influxClient.Close()
 	s.docker.Close()
 }

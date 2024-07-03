@@ -53,6 +53,7 @@ func (s *Server) Run(ctx context.Context) error {
 			// HTTPClient:  ,
 			// WorkStorage: ,
 			// Docker:      ,
+			// MetricStorage: ,
 		}
 
 		err = exec.NewExecutor(opts).Execute(ctx, received)
