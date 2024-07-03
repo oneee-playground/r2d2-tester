@@ -131,6 +131,10 @@ func (s *ExecSuite) TestExecutor() {
 	err := exec.NewExecutor(opts).Execute(ctx, job)
 	s.NoError(err)
 
-	s.influxClient.Close()
 	s.docker.Close()
+	// This will not close the underlying idle connections.
+	// I'm not sure how to fix it. But to workaround this,
+	// I'll just add logic on closing idle connections in the lib's source.
+	// Yeah it is dangerous and should be used carefully.
+	s.influxClient.Close()
 }
