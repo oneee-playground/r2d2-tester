@@ -64,7 +64,9 @@ func (c *Collector) Collect(ctx context.Context, containerName string) (<-chan S
 			// cpu usage = cpu_delta / system_cpu_delta
 			cpuDelta := stat.CPUStats.CPUUsage.TotalUsage - stat.PreCPUStats.CPUUsage.TotalUsage
 			systemDelta := stat.CPUStats.SystemUsage - stat.PreCPUStats.SystemUsage
-			result.TotalCPUUsage = float64(cpuDelta) / float64(systemDelta)
+			if cpuDelta > 0 && systemDelta > 0 {
+				result.TotalCPUUsage = float64(cpuDelta) / float64(systemDelta) * float64(stat.CPUStats.OnlineCPUs)
+			}
 
 			// Not sure if this approach is right.
 			result.CPUUsagePerCore = make([]float64, len(stat.CPUStats.CPUUsage.PercpuUsage))
