@@ -7,7 +7,7 @@ COPY ./internal ./internal
 COPY go.mod go.mod
 COPY go.sum go.sum 
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o app ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -o app ./cmd/app
 
 
 FROM alpine:latest
