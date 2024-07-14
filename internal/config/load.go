@@ -10,6 +10,6 @@ func LoadFromEnv() {
 	InfluxURL = os.Getenv("INFLUX_URL")
 	InfluxToken = os.Getenv("INFLUX_TOKEN")
 
-	JobQueueURL = os.Getenv("JOB_QUEUE_URL")
-	EventQueueURL = os.Getenv("EVENT_QUEUE_URL")
+	JobQueueURL = os.Getenv("AWS_SQS_JOB_QUEUE_URL")
+	EventQueueURL = os.Getenv("AWS_SQS_TEST_EVENT_QUEUE_URL")
 }
