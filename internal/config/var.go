@@ -12,4 +12,7 @@ var (
 var (
 	JobQueueURL   string
 	EventQueueURL string
+
+	AccessKeyID     string
+	SecretAccessKey string
 )

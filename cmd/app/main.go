@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/docker/docker/client"
 	influxdb2 "github.com/influxdata/influxdb-client-go"
@@ -36,9 +37,9 @@ func main() {
 	httpClient := &http.Client{}
 	storage := storage.NewFSStorage(conf.WorkStoragePath)
 
-	awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(conf.AWSRegion))
-	if err != nil {
-		logger.Fatal("failed to load aws config", zap.Error(err))
+	awsConfig := aws.Config{
+		Region:      "ap-northeast-2",
+		Credentials: credentials.NewStaticCredentialsProvider(conf.AccessKeyID, conf.SecretAccessKey, ""),
 	}
 
 	sqsClient := sqs.NewFromConfig(awsConfig)
