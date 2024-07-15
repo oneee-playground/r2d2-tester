@@ -88,21 +88,25 @@ func processParameters() {
 	taskID = uuid.MustParse(*_taskID)
 	sectionID = uuid.MustParse(*_sectionID)
 
-	id := uuid.MustParse(*_templateID)
-	templateID = id[:]
-
-	kvPairs := strings.Split(*_headers, ",")
-	headerMap := make(map[string]string, len(kvPairs))
-	for _, pair := range kvPairs {
-		k, v, found := strings.Cut(pair, "=")
-		if !found {
-			log.Fatal("malformed header")
-		}
-
-		headerMap[k] = v
+	if *_templateID != "" {
+		id := uuid.MustParse(*_templateID)
+		templateID = id[:]
 	}
 
-	headers = headerMap
+	if *_headers != "" {
+		kvPairs := strings.Split(*_headers, ",")
+		headerMap := make(map[string]string, len(kvPairs))
+		for _, pair := range kvPairs {
+			k, v, found := strings.Cut(pair, "=")
+			if !found {
+				log.Fatal("malformed header")
+			}
+
+			headerMap[k] = v
+		}
+
+		headers = headerMap
+	}
 }
 
 func main() {

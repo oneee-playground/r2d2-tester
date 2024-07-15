@@ -65,6 +65,10 @@ func (e *Executor) setupResources(
 			ExposedPorts: nat.PortSet{natPort: struct{}{}},
 		}
 
+		if resource.Name == "db" {
+			containerConf.Env = append(containerConf.Env, "MYSQL_ALLOW_EMPTY_PASSWORD=true")
+		}
+
 		hostConf := &container.HostConfig{
 			NetworkMode: container.NetworkMode(e.ExecNetwork),
 			Resources: container.Resources{
