@@ -50,19 +50,19 @@ func (e *Executor) setupResources(
 
 		e.Log.Debug("resource info", zap.Any("info", resource))
 
+		port := strconv.Itoa(int(resource.Port))
+		natPort, err := nat.NewPort("tcp", port)
+		if err != nil {
+			return errors.Wrap(err, "parsing binding")
+		}
+
 		containerConf := &container.Config{
 			Image:      resource.Image,
 			Hostname:   resource.Name,
 			Domainname: resource.Name,
 			// Volumes:     map[string]struct{}{},
 			// Healthcheck: &container.HealthConfig{},
-		}
-
-		port := strconv.Itoa(int(resource.Port))
-
-		natPort, err := nat.NewPort("tcp", port)
-		if err != nil {
-			return errors.Wrap(err, "parsing binding")
+			ExposedPorts: nat.PortSet{natPort: struct{}{}},
 		}
 
 		hostConf := &container.HostConfig{
@@ -71,14 +71,6 @@ func (e *Executor) setupResources(
 				Memory:    int64(resource.Memory),
 				CPUPeriod: defaultCPUPeriod,
 				CPUQuota:  int64(resource.CPU * float64(defaultCPUPeriod)),
-			},
-			PortBindings: nat.PortMap{
-				natPort: []nat.PortBinding{
-					{
-						HostIP:   "0.0.0.0",
-						HostPort: port,
-					},
-				},
 			},
 		}
 
