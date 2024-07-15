@@ -4,7 +4,8 @@ go 1.22
 
 require (
 	github.com/aws/aws-sdk-go v1.54.0
-	github.com/aws/aws-sdk-go-v2/config v1.27.26
+	github.com/aws/aws-sdk-go-v2 v1.30.3
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.26
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.32.6
 	github.com/docker/docker v27.0.3+incompatible
 	github.com/docker/go-connections v0.5.0
@@ -30,17 +31,8 @@ require (
 	github.com/Shopify/goreferrer v0.0.0-20220729165902-8cddb4f5de06 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.30.3 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.26 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.11 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.15 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.15 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.22.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.26.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.30.3 // indirect
 	github.com/aws/smithy-go v1.20.3 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bytedance/sonic v1.11.9 // indirect

@@ -47,13 +47,14 @@ func main() {
 
 	stream, errchan := storage.Stream(context.Background(), taskID, sectionID)
 
+loop:
 	for cnt != 0 {
 		select {
 		case err := <-errchan:
 			log.Fatal(err)
 		case work, ok := <-stream:
 			if !ok {
-				break
+				break loop
 			}
 			input, _ := json.Marshal(work.Input)
 			fmt.Printf("input: %s\n", input)
