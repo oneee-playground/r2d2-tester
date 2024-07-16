@@ -46,7 +46,7 @@ func (p *poller) Poll(ctx context.Context) (id string, job Job, err error) {
 	log.Println(*msg.Body)
 
 	var decoded Job
-	if err := json.Unmarshal([]byte(*msg.Body), &job); err != nil {
+	if err := json.Unmarshal([]byte(*msg.Body), &decoded); err != nil {
 		return "", Job{}, errors.Wrap(err, "failed to unmarshal job")
 	}
 
