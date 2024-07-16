@@ -58,6 +58,8 @@ func (s *Server) Run(ctx context.Context) error {
 			continue
 		}
 
+		s.log.Info("polled job", zap.Any("job", received))
+
 		submissionID := received.Submission.ID
 
 		s.log.Info("polled job", zap.String("submissionID", submissionID.String()))
