@@ -69,6 +69,8 @@ func (s *Server) Run(ctx context.Context) error {
 		start := time.Now()
 
 		opts := exec.ExecOpts{
+			ExecNetwork:   "exec-network",
+			TestNetwork:   "test-network",
 			Log:           submissionLog,
 			HTTPClient:    s.HTTPClient,
 			WorkStorage:   s.WorkStorage,
