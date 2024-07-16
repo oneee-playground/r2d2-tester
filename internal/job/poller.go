@@ -47,7 +47,7 @@ func (p *poller) Poll(ctx context.Context) (id string, job Job, err error) {
 		return "", Job{}, errors.Wrap(err, "failed to unmarshal job")
 	}
 
-	return *msg.MessageId, decoded, nil
+	return *msg.ReceiptHandle, decoded, nil
 }
 
 func (p *poller) MarkAsDone(ctx context.Context, id string) (err error) {
