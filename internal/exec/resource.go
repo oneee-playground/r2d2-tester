@@ -36,6 +36,8 @@ func (e *Executor) setupResources(
 	for _, resource := range resources {
 		proc := new(process)
 
+		e.Log.Info("setting up resource", zap.Any("resource", resource))
+
 		if resource.IsPrimary {
 			e.primaryProcess = proc
 
@@ -135,6 +137,7 @@ func (e *Executor) teardownResources(ctx context.Context) {
 	start := time.Now()
 
 	for _, process := range e.processes {
+		e.Log.Info("tearing down process", zap.Any("process", process))
 		if err := e.Docker.ContainerStop(ctx, process.ID, container.StopOptions{}); err != nil {
 			e.Log.Error("failed to stop container",
 				zap.String("containerID", process.ID),
