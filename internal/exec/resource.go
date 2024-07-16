@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/uuid"
 	"github.com/influxdata/influxdb-client-go/api/write"
@@ -108,7 +109,9 @@ func (e *Executor) setupResources(
 			// primary process should be connected to the test network.
 			e.Log.Info("resource is primary. connecting to test network")
 
-			if err := e.Docker.NetworkConnect(ctx, e.TestNetwork, con.ID, nil); err != nil {
+			if err := e.Docker.NetworkConnect(ctx, e.TestNetwork, con.ID, &network.EndpointSettings{
+				DNSNames: []string{resource.Name},
+			}); err != nil {
 				return errors.Wrap(err, "connecting primary process to test network")
 			}
 		}
