@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go/aws"
@@ -42,10 +43,14 @@ func (p *poller) Poll(ctx context.Context) (id string, job Job, err error) {
 
 	msg := result.Messages[0]
 
+	log.Println(*msg.Body)
+
 	var decoded Job
 	if err := json.Unmarshal([]byte(*msg.Body), &job); err != nil {
 		return "", Job{}, errors.Wrap(err, "failed to unmarshal job")
 	}
+
+	log.Println(decoded)
 
 	return *msg.ReceiptHandle, decoded, nil
 }
