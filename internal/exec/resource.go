@@ -124,6 +124,8 @@ func (e *Executor) setupResources(
 			Image:    resource.Image,
 		}
 		e.processes = append(e.processes, proc)
+
+		time.Sleep(10 * time.Second)
 	}
 
 	e.Log.Info("resource setup done", zap.Duration("took", time.Since(start)))

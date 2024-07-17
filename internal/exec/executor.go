@@ -59,7 +59,8 @@ func (e *Executor) Execute(ctx context.Context, jobToExec job.Job) error {
 	}
 
 	// TODO: Add health check for containers. You can do it.
-	time.Sleep(5 * time.Second)
+	// Replaced by time sleep inside setupResources
+	// time.Sleep(5 * time.Second)
 
 	ctx, cancel := context.WithCancelCause(ctx)
 	session, errchan := e.MetricStorage.WriteSession(taskID.String(), jobToExec.Submission.ID.String())
